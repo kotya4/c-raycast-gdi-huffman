@@ -10,10 +10,11 @@ int WINAPI
 WinMain ( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow ) {
   int status;
   
-  init_w ();
   
   HWND hwnd;
   init_hwnd ( &hwnd, L"ray", CW_USEDEFAULT, CW_USEDEFAULT, 400, 400, hInstance );
+  
+  init_w ( hwnd );
   
   ShowWindow ( hwnd, nCmdShow );
   ShowCursor ( FALSE );
@@ -23,6 +24,8 @@ WinMain ( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmd
     TranslateMessage ( &msg );
     DispatchMessage ( &msg );
   }
+
+  kill_w ();
 
   return msg.wParam;
   
