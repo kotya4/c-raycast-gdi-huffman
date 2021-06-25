@@ -1,12 +1,12 @@
-#ifndef DEBUG_H
-#define DEBUG_H
+#ifndef ERR_H
+#define ERR_H
 
 #define ERR_HWND_IS_NULL -0x0001
 
 #ifdef ERR_MSG
-
+  
+  #include <stdlib.h> // exit
   #include <stdio.h> // printf
-  #include <windows.h> // PostQuitMessage
   void
   err_msg ( int err ) {
     printf ( "( -0x%04x ) ", -err );
@@ -16,22 +16,20 @@
     if ( err < 0 ) {               \
       printf ( "%s: ", __func__ ); \
       err_msg ( err );             \
-      PostQuitMessage ( err );     \
-      return err;                  \
+      exit ( err );                \
     }                              \
   })
 
 #else
-
-  #include <windows.h> // PostQuitMessage
+  
+  #include <stdlib.h> // exit
   #define ERR( err )({             \
     if ( err < 0 ) {               \
-      PostQuitMessage ( err );     \
-      return err;                  \
+      exit ( err );                \
     }                              \
   })
   
 #endif // ERR_MSG
 
 
-#endif // DEBUG_H
+#endif // ERR_H

@@ -3,12 +3,19 @@
 #include <stdint.h>
 #include <stdlib.h> // calloc
 #include <string.h> // memset, memcpy
-#include "debug.h"
+#include "err.h"
+#include "sprog.h"
 
 
 typedef struct {
-  unsigned int id;
-  unsigned int delayms;
+  size_t x;
+  size_t y;
+} mouse_t;
+
+
+typedef struct {
+  size_t id;
+  size_t delayms;
 } timer_t;
 
 
@@ -21,12 +28,15 @@ typedef struct {
 
 
 typedef struct {
+  
+  mouse_t m;
 
   bool keys[ 256 ];
   
   timer_t render_timer;
   
-  int time;
+  size_t time;
+  size_t time0;
   
   display_t d;
   
@@ -52,15 +62,19 @@ kill_w () {
 int
 init_w ( HWND hwnd ) {
   
+  w.m.x = 0;
+  w.m.y = 0;
+  
   w.render_timer.id = 1;
   w.render_timer.delayms = 1000 / 60; // 60 frames per second
   
   w.time = GetTickCount ();
+  w.time0 = 0;
   
   memset ( w.keys, false, 256 * sizeof *w.keys );
   
-  w.d.width = 128;
-  w.d.height = 128;
+  w.d.width = 64;
+  w.d.height = 64;
   w.d.length = w.d.width * w.d.height * 3;
   w.d.pixels = calloc ( w.d.length, sizeof *w.d.pixels );
   
@@ -94,9 +108,10 @@ wndproc ( HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam ) {
   }
   
   else if ( umsg == WM_PAINT ) {
-    const int curtime = GetTickCount ();
-    const int elapsed = curtime - w.time;
-    w.time = curtime;
+    const size_t time = GetTickCount ();
+    const size_t elapsed = time - w.time;
+    w.time0 += elapsed;
+    w.time = time;
     PAINTSTRUCT ps = {};
     HDC hdc = BeginPaint ( hwnd, &ps );
     const int width = ps.rcPaint.right - ps.rcPaint.left;
@@ -105,12 +120,17 @@ wndproc ( HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam ) {
     const int dheight = w.d.height;
     
     uint8_t *pixels = w.d.pixels;
-    for ( int y = 0; y < dheight; ++y )
-      for ( int x = 0; x < dwidth; ++x )
+    for ( size_t y = 0; y < dheight; ++y )
+      for ( size_t x = 0; x < dwidth; ++x )
     {
-      pixels[ ( y * dwidth + x ) * 3 + 0 ] = ( uint8_t ) ( x + y + w.time / 10 );
-      pixels[ ( y * dwidth + x ) * 3 + 1 ] = ( uint8_t ) ( x * y + w.time / 10 );
-      pixels[ ( y * dwidth + x ) * 3 + 2 ] = ( uint8_t ) ( x ^ y + w.time / 10 );
+      const double dx = x / ( double ) dwidth;
+      const double dy = y / ( double ) dheight;
+      const double dt = w.time0 / 1000.0;
+      const double mx = w.m.x / ( double ) width;
+      const double my = w.m.y / ( double ) height;
+      pixels[ ( y * dwidth + x ) * 3 + 2 ] = ( uint8_t ) sprog ( SPROG_RED, dx, dy, dt, mx, my );
+      pixels[ ( y * dwidth + x ) * 3 + 1 ] = ( uint8_t ) sprog ( SPROG_GREEN, dx, dy, dt, mx, my );
+      pixels[ ( y * dwidth + x ) * 3 + 0 ] = ( uint8_t ) sprog ( SPROG_BLUE, dx, dy, dt, mx, my );
     }
     memcpy ( w.hbmpraw, pixels, w.d.length * sizeof *pixels );
     
@@ -150,6 +170,12 @@ wndproc ( HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam ) {
   
   else if ( umsg == WM_KILLFOCUS ) {
     KillTimer ( hwnd, w.render_timer.id );
+    return 0;
+  }
+  
+  else if ( umsg == WM_MOUSEMOVE ) {
+    w.m.x = ( size_t ) LOWORD ( lparam );
+    w.m.y = ( size_t ) HIWORD ( lparam );
     return 0;
   }
   
@@ -196,4 +222,3 @@ init_hwnd
   return 0;
   
 }
-
