@@ -4,7 +4,7 @@
 #include <stdlib.h> // calloc
 #include <string.h> // memset, memcpy
 #include "err.h"
-#include "sprog.h"
+// #include "sprog.h"
 
 
 typedef struct {
@@ -43,6 +43,9 @@ typedef struct {
   void *hbmpraw;
   HBITMAP hbmp;
   
+  size_t width;
+  size_t height;
+  
 } window_t;
 // wndproc arguments list is predefined so any optional value
 // passed to the winproc must be scoped globally.
@@ -53,16 +56,16 @@ int
 kill_w () {
   
   free ( w.d.pixels ); w.d.pixels = NULL;
-  w.hbmpraw = NULL;
   DeleteObject ( w.hbmp );
+  w.hbmpraw = NULL;
   
 }
 
 
 int
-init_w ( HWND hwnd ) {
+init_w ( HWND hwnd, size_t dw, size_t dh ) {
   
-  w.m.x = 0;
+  w.m.x = 0; // will be init on WM_MOUSEMOVE
   w.m.y = 0;
   
   w.render_timer.id = 1;
@@ -73,8 +76,8 @@ init_w ( HWND hwnd ) {
   
   memset ( w.keys, false, 256 * sizeof *w.keys );
   
-  w.d.width = 64;
-  w.d.height = 64;
+  w.d.width = dw;
+  w.d.height = dh;
   w.d.length = w.d.width * w.d.height * 3;
   w.d.pixels = calloc ( w.d.length, sizeof *w.d.pixels );
   
@@ -96,6 +99,51 @@ init_w ( HWND hwnd ) {
   w.hbmpraw = NULL;
   w.hbmp = CreateDIBSection ( hdc, &bmpi, DIB_RGB_COLORS, &w.hbmpraw, NULL, 0 );
   
+  w.width  = 0; // will be init on WM_SIZE after window appear
+  w.height = 0;
+  
+}
+
+
+int
+paint_w ( HWND hwnd ) {
+  
+  const size_t time = GetTickCount ();
+  const size_t elapsed = time - w.time;
+  w.time0 += elapsed;
+  w.time = time;
+  PAINTSTRUCT ps = {};
+  HDC hdc = BeginPaint ( hwnd, &ps );
+  const int top = ps.rcPaint.top;
+  const int left = ps.rcPaint.left;
+  const int width = ps.rcPaint.right - ps.rcPaint.left;
+  const int height = ps.rcPaint.bottom - ps.rcPaint.top;
+  const int dwidth = w.d.width;
+  const int dheight = w.d.height;
+  
+  uint8_t *pixels = w.d.pixels;
+  for ( size_t y = 0; y < dheight; ++y )
+    for ( size_t x = 0; x < dwidth; ++x )
+  {
+    const double dx = x / ( double ) dwidth;
+    const double dy = y / ( double ) dheight;
+    const double dt = w.time0 / 1000.0;
+    const double mx = w.m.x / ( double ) width;
+    const double my = w.m.y / ( double ) height;
+    pixels[ ( y * dwidth + x ) * 3 + 2 ] = ( uint8_t ) sprog ( SPROG_RED, dx, dy, dt, mx, my );
+    pixels[ ( y * dwidth + x ) * 3 + 1 ] = ( uint8_t ) sprog ( SPROG_GREEN, dx, dy, dt, mx, my );
+    pixels[ ( y * dwidth + x ) * 3 + 0 ] = ( uint8_t ) sprog ( SPROG_BLUE, dx, dy, dt, mx, my );
+  }
+  memcpy ( w.hbmpraw, pixels, w.d.length * sizeof *pixels );
+  
+  HDC cdc = CreateCompatibleDC ( hdc );
+  HBITMAP oldhbmp = ( HBITMAP ) SelectObject ( cdc, w.hbmp );
+  StretchBlt ( hdc, left, top, width, height, cdc, 0, 0, dwidth, dheight, SRCCOPY );
+  SelectObject ( cdc, oldhbmp );
+  DeleteDC ( cdc );
+  EndPaint ( hwnd, &ps );
+  return 0;
+  
 }
 
 
@@ -108,38 +156,7 @@ wndproc ( HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam ) {
   }
   
   else if ( umsg == WM_PAINT ) {
-    const size_t time = GetTickCount ();
-    const size_t elapsed = time - w.time;
-    w.time0 += elapsed;
-    w.time = time;
-    PAINTSTRUCT ps = {};
-    HDC hdc = BeginPaint ( hwnd, &ps );
-    const int width = ps.rcPaint.right - ps.rcPaint.left;
-    const int height = ps.rcPaint.bottom - ps.rcPaint.top;
-    const int dwidth = w.d.width;
-    const int dheight = w.d.height;
-    
-    uint8_t *pixels = w.d.pixels;
-    for ( size_t y = 0; y < dheight; ++y )
-      for ( size_t x = 0; x < dwidth; ++x )
-    {
-      const double dx = x / ( double ) dwidth;
-      const double dy = y / ( double ) dheight;
-      const double dt = w.time0 / 1000.0;
-      const double mx = w.m.x / ( double ) width;
-      const double my = w.m.y / ( double ) height;
-      pixels[ ( y * dwidth + x ) * 3 + 2 ] = ( uint8_t ) sprog ( SPROG_RED, dx, dy, dt, mx, my );
-      pixels[ ( y * dwidth + x ) * 3 + 1 ] = ( uint8_t ) sprog ( SPROG_GREEN, dx, dy, dt, mx, my );
-      pixels[ ( y * dwidth + x ) * 3 + 0 ] = ( uint8_t ) sprog ( SPROG_BLUE, dx, dy, dt, mx, my );
-    }
-    memcpy ( w.hbmpraw, pixels, w.d.length * sizeof *pixels );
-    
-    HDC cdc = CreateCompatibleDC ( hdc );
-    HBITMAP oldhbmp = ( HBITMAP ) SelectObject ( cdc, w.hbmp );
-    StretchBlt ( hdc, 0, 0, width, height, cdc, 0, 0, dwidth, dheight, SRCCOPY );
-    SelectObject ( cdc, oldhbmp );
-    DeleteDC ( cdc );
-    EndPaint ( hwnd, &ps );
+    paint_w ( hwnd );
     return 0;
   }
   
@@ -176,6 +193,12 @@ wndproc ( HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam ) {
   else if ( umsg == WM_MOUSEMOVE ) {
     w.m.x = ( size_t ) LOWORD ( lparam );
     w.m.y = ( size_t ) HIWORD ( lparam );
+    return 0;
+  }
+  
+  else if ( umsg == WM_SIZE ) {
+    w.width  = ( size_t ) LOWORD ( lparam );
+    w.height = ( size_t ) HIWORD ( lparam );
     return 0;
   }
   

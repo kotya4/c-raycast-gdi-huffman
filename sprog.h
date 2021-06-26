@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <math.h>
 #include "err.h"
+#include "sproge.h"
 
 
 typedef double sprogval_t;
@@ -21,57 +22,24 @@ typedef struct {
   sprogstack_t **pstack;
 } sprog_t;
 
+
 #define SPROG_RED   ( sprog_t ) { 0, 0, NULL }
 #define SPROG_GREEN ( sprog_t ) { 1, 0, NULL }
 #define SPROG_BLUE  ( sprog_t ) { 2, 0, NULL }
 
+
 typedef const char * sprogp_t;
+
 
 #define SPROG_MAX_DEPTH 256
 
+
 int
 sprog ( sprog_t sprg, ... ) {
+  
   static const sprogp_t programs[] = {
-    // circle dance
-    "a1/ 2x21/-^   2y13t%--^ +<",
-    "a1/ 2x13t%--^ 2y21/-^   +<",
-    "a1/ 2xX-^     2yY-^     +<",
-    // empty
-    "0",
-    "0",
-    "0",
-    // xy*
-    "1@2@*",
-    "x",
-    "y",
-    // maxdepth error
-    "x1@+",
-    "y10-@",
-    // circle dance
-    "a1/ 2x21/-^   2y13t%--^ +<",
-    "a1/ 2x13t%--^ 2y21/-^   +<",
-    "a1/ 2xX-^     2yY-^     +<",
-    // move with mouse
-    "a1/ 2xX-^     2yY-^     +<",
-    //                (t%3-1-y)^2
-    "a1/ 2x21/-^      2y13t%--^      +<",
-    //radius  (0.5-x)^2   (0.5-y)^2   circle
-    "a1/      2x21/-^     2y21/-^     +   <",
-    // some serpinski masked wit circle quad
-    "tff*x*ff*y*~ff**/ 2xy+/1-1xx*yy*+<* *",
-    // circle quad masks sum
-    "2xy+/1- 1xx*yy*+< *",
-    // scaled circle quad
-    "a1/xx*yy*+<",
+    SPROGE_PULSE_RECT
   };
-  
-  sprogstack_t *stack;
-  if ( sprg.depth > 0 ) {
-    stack = *sprg.pstack;
-  } else {
-    stack = NULL;
-  }
-  
   
   va_list vargs;
   va_start ( vargs, sprg );
@@ -82,36 +50,122 @@ sprog ( sprog_t sprg, ... ) {
   const sprogval_t arg_Y = va_arg ( vargs, double );
   va_end ( vargs );
   
-  #define SPROG_POPA                                           \
-    if ( stack == NULL ) {                                     \
-      printf ( "sprog: end of stack at command %c (%d)         \
-      in channel %d, index %d\n", c, sprg.channel, i + 1 );   \
-      ERR ( -5 );                                              \
-    }                                                          \
-    const sprogval_t a = stack->value;                         \
-    prev = stack->prev;                                        \
-    free ( stack );                                            \
-    stack = prev;
+  sprogstack_t *_stack = NULL;
+  if ( sprg.pstack == NULL ) sprg.pstack = &_stack;
+  #define SPROG_STACK ( *sprg.pstack )
   
-  #define SPROG_GETB                                            \
-    if ( stack == NULL ) {                                      \
-      printf ( "sprog: end of stack at command (%f)%c (%d)      \
-      in channel %d, index %d\n", a, c, sprg.channel, i + 1 ); \
-      ERR ( -5 );                                               \
-    }                                                           \
-    const sprogval_t b = stack->value;
+  #define SPROG_POPA                         \
+    if ( SPROG_STACK == NULL ) {             \
+      SPROG_MSG_ENDA;                        \
+      ERR ( ERR_SPROG_FAILED );              \
+    }                                        \
+    const sprogval_t a = SPROG_STACK->value; \
+    prev = SPROG_STACK->prev;                \
+    free ( SPROG_STACK );                    \
+    SPROG_STACK = prev;
+    
+  #define SPROG_GETA                         \
+    if ( SPROG_STACK == NULL ) {             \
+      SPROG_MSG_ENDA;                        \
+      ERR ( ERR_SPROG_FAILED );              \
+    }                                        \
+    const sprogval_t a = SPROG_STACK->value;
   
-  #define SPROG_PUSH( v ) ({             \
-    prev = stack;                        \
-    stack = calloc ( 1, sizeof *stack ); \
-    stack->prev = prev;                  \
-    stack->value = v;                    \
+  #define SPROG_GETB                         \
+    if ( SPROG_STACK == NULL ) {             \
+      SPROG_MSG_ENDB;                        \
+      ERR ( ERR_SPROG_FAILED );              \
+    }                                        \
+    const sprogval_t b = SPROG_STACK->value;
+  
+  #define SPROG_PUSH( v ) ({                         \
+    prev = SPROG_STACK;                              \
+    SPROG_STACK = calloc ( 1, sizeof *SPROG_STACK ); \
+    SPROG_STACK->prev = prev;                        \
+    SPROG_STACK->value = v;                          \
   })
-  size_t i;
-  for ( i = 0; programs[ sprg.channel ][ i ] > '\0'; ++i ) {
+  
+  #define SPROG_FREESTACK ({          \
+    for ( ; SPROG_STACK != NULL; ) {  \
+      void *prev = SPROG_STACK->prev; \
+      free ( SPROG_STACK );           \
+      SPROG_STACK = prev;             \
+    }                                 \
+  })
+  
+  #ifdef ERR_MSG
+    
+    #define SPROG_MSG_ENDA ({                                \
+      printf ( "sprogmsg: end of stack at command %c (%d) in \
+channel %d, index %d\n", c, c, sprg.channel, i + 1 );        \
+    })
+  
+    #define SPROG_MSG_ENDB ({                                    \
+      printf ( "sprogmsg: end of stack at command (%f)%c (%d) in \
+channel %d, index %d\n", a, c, c, sprg.channel, i + 1 );         \
+    })
+    
+    #define SPROG_MSG_DIVB ({                                   \
+        printf ( "sprogmsg: 0 division at (%f)(%f)%c in channel \
+%d, index %d\n", b, a, c, sprg.channel, i + 1 );                \
+    })
+    
+    #define SPROG_MSG_DUMP ({        \
+      sprogstack_t *s = SPROG_STACK; \
+      printf ( "sprogst: " );        \
+      for ( ; s != NULL; ) {         \
+        printf ( "(%f)", s->value ); \
+        s = s->prev;                 \
+      }                              \
+      printf ( "\n" );               \
+    })
+    
+    #define SPROG_MSG_RECOURSION ({                         \
+        printf ( "sprogmsg: recoursion at (%f)%c in channel \
+%d, index %d\n", a, c, sprg.channel, i + 1 );               \
+    })
+
+    #define SPROG_MSG_MAXDEPTH ({                                \
+        printf ( "sprogmsg: maxdepth %d at (%f)%c in channel %d, \
+index %d\n", sprg.depth, a, c, sprg.channel, i + 1 );            \
+    })
+    
+    #define SPROG_MSG_UNKNOWNCOMM ({                        \
+      printf ( "sprogmsg: unkown command %c (%d) in channel \
+%d, index %d\n", c, c, sprg.channel, i + 1 );               \
+    })
+    
+    #define SPROG_MSG_NOVALUE ({                     \
+      printf ( "sprogmsg: channel %d leaves no value \
+in stack at all\n", sprg.channel );                  \
+    })
+    
+    #define SPROG_MSG_TOMANYVALUES ({               \
+      printf ( "sprogmsg: channel %d leaves several \
+values in stack\n", sprg.channel );                 \
+    })
+    
+  #else // ERR_MSG
+  
+    #define SPROG_MSG_ENDA ({})
+    #define SPROG_MSG_ENDB ({})
+    #define SPROG_MSG_DIVB ({})
+    #define SPROG_MSG_DUMP ({})
+    #define SPROG_MSG_RECOURSION ({})
+    #define SPROG_MSG_MAXDEPTH ({})
+    #define SPROG_MSG_UNKNOWNCOMM ({})
+    #define SPROG_MSG_NOVALUE ({})
+    #define SPROG_MSG_TOMANYVALUES ({}) 
+    
+  #endif // ERR_MSG
+  
+  for ( size_t i = 0; programs[ sprg.channel ][ i ] > '\0'; ++i ) {
     const char c = programs[ sprg.channel ][ i ];
     void *prev = NULL;
-    if ( c == 'x' ) {
+    if ( c == ' ' ) {
+      
+    }
+    else if ( c == 'x' ) {
       SPROG_PUSH( arg_x );
     }
     else if ( c == 'y' ) {
@@ -129,132 +183,106 @@ sprog ( sprog_t sprg, ... ) {
     else if ( c == '+' ) {
       SPROG_POPA;
       SPROG_GETB;
-      stack->value = a + b;
+      SPROG_STACK->value = a + b;
     }
     else if ( c == '-' ) {
       SPROG_POPA;
       SPROG_GETB;
-      stack->value = a - b;
+      SPROG_STACK->value = a - b;
     }
     else if ( c == '%' ) {
       SPROG_POPA;
       SPROG_GETB;
       if ( b == 0 ) {
-        printf ( "sprog: 0 division at (%f)(%f)%c \
-        in channel %d, index %d\n", b, a, c, sprg.channel, i + 1 ); 
-        ERR ( -6 );    
+        SPROG_MSG_DIVB;
+        ERR ( ERR_SPROG_FAILED );
       }
-      stack->value = fmod ( a, b );
+      SPROG_STACK->value = fmod ( a, b );
     }
     else if ( c == '*' ) {
       SPROG_POPA;
       SPROG_GETB;
-      stack->value = a * b;
+      SPROG_STACK->value = a * b;
     }
     else if ( c == '~' ) {
       SPROG_POPA;
       SPROG_GETB;
-      stack->value = ( ( int ) round ( a ) ) ^ ( ( int ) round ( b ) );
+      SPROG_STACK->value = ( ( int ) round ( a ) ) ^ ( ( int ) round ( b ) );
     }
     else if ( c == '<' ) {
       SPROG_POPA;
       SPROG_GETB;
-      stack->value = a < b ? 1.0 : 0.0;
+      SPROG_STACK->value = a < b ? 1.0 : 0.0;
     }
     else if ( c == '^' ) {
       SPROG_POPA;
       SPROG_GETB;
-      stack->value = pow ( a, b );
+      SPROG_STACK->value = pow ( a, b );
+    }
+    else if ( c == 'A' ) {
+      SPROG_GETA;
+      SPROG_STACK->value = fabs ( a );
     }
     else if ( c == '/' ) {
       SPROG_POPA;
       SPROG_GETB;
       if ( b == 0 ) {
-        printf ( "sprog: 0 division at (%f)(%f)%c \
-        in channel %d, index %d\n", b, a, c, sprg.channel, i + 1 ); 
-        ERR ( -6 );    
+        SPROG_MSG_DIVB;
+        ERR ( ERR_SPROG_FAILED ); 
       }
-      stack->value = a / b;
+      SPROG_STACK->value = a / b;
     }
     else if ( '0' <= c && c <= '9' || 'a' <= c && c <= 'f' ) {
-      prev = stack;
-      stack = calloc ( 1, sizeof *stack );
-      stack->prev = prev;
-      if ( '0' <= c && c <= '9' ) {
-        stack->value = c - '0';
-      }
-      else if ( 'a' <= c && c <= 'f' ) {
-        stack->value = c - 'a' + 10;
-      }
-    }
-    else if ( c == ' ' ) {
-      
+      sprogval_t value;
+      if ( '0' <= c && c <= '9' ) value = c - '0';
+      else if ( 'a' <= c && c <= 'f' ) value = c - 'a' + 10;
+      SPROG_PUSH ( value );
     }
     else if ( c == '@' ) {
       SPROG_POPA;
       const int ia = ( ( int ) round ( a ) );
       if ( ia == 0 ) {
-        printf ( "sprog: recoursion at (%f)%c \
-        in channel %d, index %d\n", a, c, sprg.channel, i + 1 ); 
-        ERR ( -7 );    
+        SPROG_MSG_RECOURSION;
+        ERR ( ERR_SPROG_FAILED );  
       }
       if ( sprg.depth >= SPROG_MAX_DEPTH ) {
-        printf ( "sprog: maxdepth %d at (%f)%c \
-        in channel %d, index %d\n", sprg.depth, a, c, sprg.channel, i + 1 ); 
-        ERR ( -8 ); 
+        SPROG_MSG_MAXDEPTH;
+        ERR ( ERR_SPROG_FAILED );
       }
-      sprg.pstack = &stack;
       sprog
         ( ( sprog_t )
               { sprg.channel + ia
               , sprg.depth + 1
-              , sprg.pstack
+              , &SPROG_STACK
               }
         , arg_x, arg_y, arg_t, arg_X, arg_Y 
         );
-      stack = *sprg.pstack;
     }
     else {
-      printf ( "sprog: unkown command %c (%d) \
-      in channel %d, index %d\n", c, sprg.channel, i + 1 );
-      printf ( "stack: " );
-      for ( ; stack != NULL; ) {
-        printf ( "(%d)", stack->value );
-        void *prev = stack->prev;
-        free ( stack );
-        stack = prev;
-      }
-      printf ( "\n" );
-      ERR ( -2 );
+      SPROG_MSG_UNKNOWNCOMM;
+      SPROG_MSG_DUMP;
+      SPROG_FREESTACK;
+      ERR ( ERR_SPROG_FAILED );
     }
   }
 
-  if ( sprg.depth > 0 ) {
-    *sprg.pstack = stack;
-    return 0;
-  }
-
-  if ( stack == NULL ) {
-    printf ( "sprog: channel %d leaves no value in stack at all\n", sprg.channel );
-    ERR ( -3 );
+  if ( sprg.depth > 0 ) return 0;
+  
+  if ( SPROG_STACK == NULL ) {
+    SPROG_MSG_NOVALUE;
+    ERR ( ERR_SPROG_FAILED );
   }
   
-  const sprogval_t value = stack->value;
+  const sprogval_t value = SPROG_STACK->value;
   
-  if ( stack->prev != NULL ) {
-    printf ( "sprog: channel %d leaves values in stack after %f\n", sprg.channel, value );
-    printf ( "stack: " );
-    for ( ; stack->prev != NULL; ) {
-      void *prev = stack->prev;
-      free ( stack );
-      stack = prev;
-      printf ( "(%f)", stack->value );
-    }
-    printf ( "\n" );
-    ERR ( -4 );
+  if ( SPROG_STACK->prev != NULL ) {
+    SPROG_MSG_TOMANYVALUES;
+    SPROG_MSG_DUMP;
+    SPROG_FREESTACK;
+    ERR ( ERR_SPROG_FAILED );
   }
   
-  free ( stack );
+  SPROG_FREESTACK;
   
   return ( int ) ( 255 * value );
 }

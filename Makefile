@@ -9,3 +9,7 @@ d:
 
 r:
 	gcc main.c $(LINKER) -o ray -O2 -s -DNDEBUG
+
+t:
+	gcc test.c $(LINKER) -o test
+	./test

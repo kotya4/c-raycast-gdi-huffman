@@ -12,7 +12,7 @@ WinMain ( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmd
   HWND hwnd;
   init_hwnd ( &hwnd, L"ray", CW_USEDEFAULT, CW_USEDEFAULT, 300, 300, hInstance );
   
-  init_w ( hwnd );
+  init_w ( hwnd, 64, 64 );
   
   ShowWindow ( hwnd, nCmdShow );
   // ShowCursor ( FALSE );
