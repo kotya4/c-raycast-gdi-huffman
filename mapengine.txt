@@ -1,0 +1,17 @@
+  for ( size_t y = 0; y < w.map.h; ++y )
+    for ( size_t x = 0; x < w.map.w; ++x )
+    size_t type = MAP_GET_TYPE ( w.map.a[ y * w.map.w + x ] );
+    size_t surw = MAP_GET_SURW ( w.map.a[ y * w.map.w + x ] );
+    size_t surf = MAP_GET_SURF ( w.map.a[ y * w.map.w + x ] );
+    size_t surc = MAP_GET_SURC ( w.map.a[ y * w.map.w + x ] );
+    if ( type == MAP_TYPE_WALL ) {
+      pixels[ ( y * dwidth + x ) * 3 + 2 ] = ( uint8_t ) ( colors[ surw ] >> 0x00 ) & 0xff;
+      pixels[ ( y * dwidth + x ) * 3 + 1 ] = ( uint8_t ) ( colors[ surw ] >> 0x08 ) & 0xff;
+      pixels[ ( y * dwidth + x ) * 3 + 0 ] = ( uint8_t ) ( colors[ surw ] >> 0x10 ) & 0xff;
+    }
+    else {
+      pixels[ ( y * dwidth + x ) * 3 + 2 ] = ( uint8_t ) ( ( colors[ surc ] >> 0x00 ) & 0xff ) / 2;
+      pixels[ ( y * dwidth + x ) * 3 + 1 ] = ( uint8_t ) ( ( colors[ surc ] >> 0x08 ) & 0xff ) / 2;
+      pixels[ ( y * dwidth + x ) * 3 + 0 ] = ( uint8_t ) ( ( colors[ surc ] >> 0x10 ) & 0xff ) / 2;
+    }
+  }
