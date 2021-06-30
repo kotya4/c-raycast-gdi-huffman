@@ -3,7 +3,7 @@
 
 
 typedef struct {
-  
+
   int v;
   void *p;
 
@@ -51,20 +51,41 @@ s_free ( s_t **sp ) {
 
 int
 main () {
-  
+
   printf ( "test\n" );
-  
+
+  // typedef unsigned int t;
+  // typedef t * tt;
+
+  const int imgn[ 3 ][ 3 ] = { { 33, }, { 0, 1, }, { 19, 2, 3, } };
+
+
+  // printf ( "%d\n", imgn );
+  // printf ( "%d\n", *imgn );
+  printf ( "%d\n", imgn[0][1] );
+
+
+  return 0;
+
+
+
+  printf ( "%d = %d\n", 0b11 << 1 + 1, 0b11 << ( 1 + 1 ) );
+
+
+
+  return 0;
+
   int d = 1;
-  
+
   s_t *s = NULL;
-  
+
   s_new ( &s, 666 );
   s_new ( &s, 777 );
-  
+
   s_dump ( &s );
-  
-  
-  
+
+
+
   s_free ( &s );
 }
 
@@ -75,7 +96,7 @@ main () {
   // printf ( "\ndepth: %d\n", d );
   // s_t *s = os;
   // printf ( os == NULL ? "s was NULL\n" : "s was POINTER\n" );
-  
+
   // {
     // void *p = s;
     // s = malloc ( 1 * sizeof *s );
@@ -83,7 +104,7 @@ main () {
     // s->p = p;
     // printf ( "allocated new s\n" );
   // }
-  
+
   // printf("s dump:\n");
   // {
     // s_t *dump = s;
@@ -94,20 +115,20 @@ main () {
       // dump = p;
     // }
   // }
-  
-  // // if ( out != NULL ) 
+
+  // // if ( out != NULL )
 
   // if ( d <= 0 ) {
     // *out = s;
     // return 0;
   // }
-  
+
   // s_t *in;
   // f ( dd, d - 1, s, &in );
   // s = in;
-  
+
   // // s = *out;
-  
+
   // printf("\nafter return at depth %d:\n", d);
   // {
     // s_t *dump = s;
@@ -118,7 +139,7 @@ main () {
       // dump = p;
     // }
   // }
-  
+
   // if ( dd == d ) {
     // printf("\nfreed\n");
     // for ( int i = 0; s != NULL; ++i ) {
