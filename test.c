@@ -49,10 +49,98 @@ s_free ( s_t **sp ) {
 }
 
 
+size_t fib ( size_t n ) {
+  size_t a = 1;
+  size_t b = 0;
+  for ( ; n > 0; --n ) {
+    size_t c = a;
+    a = b;
+    b = c + b;
+  }
+  return b;
+}
+
+
+#include <string.h>
+
+char buffer[ 128 ];
+size_t buffer_len;
+
+// числа развернуты неправвильно
+void fibword ( size_t n ) {
+  if ( buffer_len + 1 >= 128 ) return;
+  if ( n == 0 ) {
+    buffer[ buffer_len ] = '0';
+    buffer_len += 1;
+    return;
+  }
+  else if ( n == 1 ) {
+    buffer[ buffer_len ] = '1';
+    buffer_len += 1;
+    return;
+  }
+  else if ( n == 2 ) {
+    buffer[ buffer_len ] = '2';
+    buffer_len += 1;
+    return;
+  }
+  else if ( n == 3 ) {
+    buffer[ buffer_len ] = '3';
+    buffer_len += 1;
+    return;
+  }
+  else if ( n == 5 ) {
+    buffer[ buffer_len ] = '5';
+    buffer_len += 1;
+    return;
+  }
+  else if ( n == 7 ) {
+    buffer[ buffer_len ] = '7';
+    buffer_len += 1;
+    return;
+  }
+  fibword ( n - 1 );
+  fibword ( n - 2 );
+
+
+  // strcat ( buffer, fibword ( n - 1 ) );
+
+  // strcat ( buffer, fibword ( n - 2 ) );
+  // return buffer;
+}
+
+
 int
 main () {
 
   printf ( "test\n" );
+
+  for ( size_t i = 0; i < 15; ++i ) {
+    // printf ( "%d\n", fib ( i ) );
+    memset ( buffer, 0, 128 );
+    buffer_len = 0;
+    fibword ( i );
+    printf ( "%s %d\n", buffer, buffer_len );
+  }
+
+
+}
+
+
+  // for ( size_t i = 0; i < 11; ++i ) {
+    // printf ( "%d\n", fib ( i ) );
+  // }
+
+
+
+/*
+
+
+
+
+
+
+  return 0;
 
   // typedef unsigned int t;
   // typedef t * tt;
@@ -149,3 +237,4 @@ main () {
     // }
   // }
 // }
+*/

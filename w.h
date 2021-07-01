@@ -9,8 +9,9 @@
 #include "err.h"
 // #include "sprog.h"
 #include "map.h"
-#include "bmpi.h"
 #include "imgd.h"
+#include "audio.h"
+#include "sound.h"
 
 
 typedef struct {
@@ -41,16 +42,21 @@ typedef struct {
 
   timer_t render_timer;
 
-  size_t time;
-  size_t time0;
+  size_t time; // posix in millisecs
+  size_t time0; // program running in millisecs
 
   display_t d;
 
   void *hbmpraw;
   HBITMAP hbmp;
 
+  // TODO: probably not nessesary as wm_paint provides window size
   size_t width;
   size_t height;
+
+  // =====================================
+  // GAME ; TODO: maybe need to be separated
+  // =====================================
 
   map_t map;
 
@@ -60,14 +66,19 @@ typedef struct {
   texture_t *textures;
   size_t textures_length;
 
+  audio_t audio;
+
+  #define W_SOUNDS_LENGTH 1
+  audiobuffer_t sounds[ W_SOUNDS_LENGTH ];
+
 } window_t;
-// wndproc arguments list is predefined so any optional value
-// passed to the winproc must be scoped globally.
+// HACK: wndproc arguments list is predefined so any optional value
+//       passed to the winproc must be scoped globally.
 window_t w;
 
 
 int
-kill_w () {
+w_kill () {
 
   free ( w.d.pixels ); w.d.pixels = NULL;
   DeleteObject ( w.hbmp );
@@ -79,11 +90,15 @@ kill_w () {
   }
   w.bmpis = NULL;
 
+  audio_kill ( &w.audio );
+  for ( size_t i = 0; i < W_SOUNDS_LENGTH; ++i ) {
+    audiobuffer_kill ( &w.sounds[ i ] );
+  }
 }
 
 
 int
-init_w ( HWND hwnd, size_t dw, size_t dh ) {
+w_init ( HWND hwnd, size_t dw, size_t dh ) {
 
   srand ( time( NULL ) );
 
@@ -131,11 +146,17 @@ init_w ( HWND hwnd, size_t dw, size_t dh ) {
 
   imgdecode ( &w.bmpis, &w.bmpis_length, &w.textures, &w.textures_length );
 
+  audio_init ( &w.audio );
+  sound_kbjorklu ( &w.sounds[ 0 ] );
+  sound_fadein ( &w.sounds[ 0 ], 10 );
+
+  audio_play ( &w.audio, &w.sounds[ 0 ] );
+
 }
 
 
 int
-paint_w ( HWND hwnd ) {
+w_paint ( HWND hwnd ) {
 
   const size_t time = GetTickCount ();
   const size_t elapsed = time - w.time;
@@ -163,29 +184,35 @@ paint_w ( HWND hwnd ) {
     // }
   // }
 
-  const size_t textures_index = ( ( size_t ) ( w.time0 / 2000 ) ) % w.textures_length;
-  const size_t t_index = ( ( size_t ) ( w.time0 / 500 ) ) % w.textures[ textures_index ].length;
-
-
+  int t = ( w.time0 - elapsed ) * 8;
   for ( size_t y = 0; y < dheight; ++y )
     for ( size_t x = 0; x < dwidth; ++x )
   {
+    pixels[ ( y * dwidth + x ) * 3 + 2 ] = ( uint8_t ) w.sounds[0].a[t];
 
-
-
-    bmpi_rgb24_t *rgb24 =
-      bmpi_rgb24_at
-        ( w.textures[ textures_index ].bmpis[ t_index ]
-        , x % w.textures[ textures_index ].bmpis[ t_index ]->w
-        , y % w.textures[ textures_index ].bmpis[ t_index ]->h
-        );
-
-    if ( rgb24 == NULL ) ERR ( -100 );
-
-    pixels[ ( y * dwidth + x ) * 3 + 2 ] = ( uint8_t ) rgb24->r;
-    pixels[ ( y * dwidth + x ) * 3 + 1 ] = ( uint8_t ) rgb24->g;
-    pixels[ ( y * dwidth + x ) * 3 + 0 ] = ( uint8_t ) rgb24->b;
   }
+
+  // const size_t textures_index = ( ( size_t ) ( w.time0 / 2000 ) ) % w.textures_length;
+  // const size_t t_index = ( ( size_t ) ( w.time0 / 500 ) ) % w.textures[ textures_index ].length;
+  // for ( size_t y = 0; y < dheight; ++y )
+    // for ( size_t x = 0; x < dwidth; ++x )
+  // {
+
+
+
+    // bmpi_rgb24_t *rgb24 =
+      // bmpi_rgb24_at
+        // ( w.textures[ textures_index ].bmpis[ t_index ]
+        // , x % w.textures[ textures_index ].bmpis[ t_index ]->w
+        // , y % w.textures[ textures_index ].bmpis[ t_index ]->h
+        // );
+
+    // if ( rgb24 == NULL ) ERR ( -100 );
+
+    // pixels[ ( y * dwidth + x ) * 3 + 2 ] = ( uint8_t ) rgb24->r;
+    // pixels[ ( y * dwidth + x ) * 3 + 1 ] = ( uint8_t ) rgb24->g;
+    // pixels[ ( y * dwidth + x ) * 3 + 0 ] = ( uint8_t ) rgb24->b;
+  // }
 
 
 
@@ -211,7 +238,7 @@ wndproc ( HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam ) {
   }
 
   else if ( umsg == WM_PAINT ) {
-    paint_w ( hwnd );
+    w_paint ( hwnd );
     return 0;
   }
 
@@ -263,7 +290,7 @@ wndproc ( HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam ) {
 
 
 int
-init_hwnd
+make_hwnd
   ( HWND *hwnd
   , const wchar_t *title
   , const int x

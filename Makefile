@@ -1,4 +1,4 @@
-LINKER = -mwindows -std=c99
+LINKER = -mwindows -lwinmm -std=c99
 NOWARN = -Wno-return-type -Wno-parentheses -Wno-unused-variable
 
 all:
