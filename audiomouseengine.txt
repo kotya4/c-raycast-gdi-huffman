@@ -1,0 +1,14 @@
+  else if ( umsg == WM_MOUSEMOVE ) {
+    w.m.x = ( size_t ) LOWORD ( lparam );
+    w.m.y = ( size_t ) HIWORD ( lparam );
+
+    for ( size_t t = 0; t < w.sounds[ 0 ].l; ++t ) {
+
+      w.sounds[ 0 ].a[ t ] = 256 * ( w.m.x / ( double ) w.width ) * sin ( t / 20.0 ) * 10;
+
+    }
+
+    audio_play ( &w.audio, &w.sounds[ 0 ] );
+
+    return 0;
+  }
