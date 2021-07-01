@@ -1,3 +1,4 @@
+# generates imgs.h and imgn.h from images
 from os import walk
 from datetime import datetime
 from re import findall
