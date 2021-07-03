@@ -57,8 +57,8 @@ map_init ( map_t *m, size_t w, size_t h ) {
 }
 
 
-int
-map_surfacify // randomly changes existing surfaces
+int // randomly changes existing surfaces
+map_surfacify
   ( map_t *m
   , const size_t x0
   , const size_t y0
@@ -101,8 +101,8 @@ map_surfacify // randomly changes existing surfaces
 }
 
 
-int
-map_mazify // recoursive division maze
+int // recoursive division maze
+map_mazify
   ( map_t *m
   , size_t x0
   , size_t y0
@@ -177,7 +177,6 @@ map_borderify ( map_t *m ) {
 
 int
 map_crossify ( map_t *m ) {
-  // TODO: круст должен создавать проходы везде
   size_t w = m->w >> 1;
   size_t h = m->h >> 1;
   // cross
@@ -232,15 +231,18 @@ map_voidify ( map_t *m, size_t x, size_t y, const size_t w, const size_t h ) {
 }
 
 
-int
-map_quadrantify ( map_t *m ) { // quadrant maze generator
+int // quadrant maze generator
+map_quadrantify ( map_t *m ) {
   const size_t w = ( m->w >> 1 ) + ( rand () & 1 );
   const size_t h = ( m->h >> 1 ) + ( rand () & 1 );
   size_t quadrants = 0b000; // <TR><BL><BR>
   const size_t offseti = rand () % 3;
   for ( size_t i = 0; i < 3 && quadrants != 0b111; ++i ) {
     map_voidify ( m, 0, 0, w, h );
-    map_mazify ( m, 0, 0, w, h, 0, rand () % 8 > 0 ); // catacombs 12.5%, rooms 87.5%
+    int maze_scaler = 0; // catacombs
+    if ( rand () % 20 > 0 ) maze_scaler = 1; // room
+    if ( rand () % 8 == 0 ) maze_scaler = 2; // large room
+    map_mazify ( m, 0, 0, w, h, 0, maze_scaler );
     // choose quadrants and mirror to them
     size_t currect_quadrants = ( 1 << ( i + offseti ) % 3 );
     currect_quadrants |= ( rand () % 2 << 2 ) | ( rand () % 2 << 1 ) | ( rand () % 2 << 0 );
@@ -271,6 +273,88 @@ map_quadrantify ( map_t *m ) { // quadrant maze generator
   }
 }
 
+/*
+typedef struct {
+  int posi;
+  int zindex;
+} _map_door_t;
+#define _MAP_DOORS_LENGTH 128
+
+
+void
+_map_fill_zone ( map_t *m, int *zones, int x, int y, int zindex, _map_door_t *doors, int *doors_length ) {
+  if ( x < 0 || y < 0 || x >= m->w || y >= m->h ) return;
+
+  const int i = y * m->w + x;
+
+  if ( zones[ i ] == 0 ) {
+
+    if ( MAP_GET_TYPE ( m->a[ i ] ) == MAP_TYPE_VOID ) {
+
+      zones[ i ] = zindex;
+
+      map_fill_zone ( m, zones, x + 1, y, zindex );
+      map_fill_zone ( m, zones, x - 1, y, zindex );
+      map_fill_zone ( m, zones, x, y + 1, zindex );
+      map_fill_zone ( m, zones, x, y - 1, zindex );
+
+    }
+    else if ( MAP_GET_TYPE ( m->a[ i ] ) == MAP_TYPE_WALL ) {
+
+      zones[ i ] = -1;
+
+    }
+    else if ( MAP_GET_TYPE ( m->a[ i ] ) == MAP_TYPE_PASS ) {
+
+      zones[ i ] = -1 - zindex;
+
+      if ( *doors_length >= _MAP_DOORS_LENGTH ) {
+        WARN ( "max doors length\n" );
+        return;
+      }
+
+      doors[ *doors_length ].posi = i;
+      doors[ *doors_length ].zindex = zindex;
+
+    }
+
+  }
+
+
+
+
+}
+
+
+int
+map_zonefy ( map_t *m ) {
+  int *zones = calloc ( m->l, sizeof *zones );
+
+  int entryi = -1;
+
+  const int ioff = rand ();
+  for ( int i0 = 0; i0 < m->l; ++i0 ) {
+    const int i = ( i0 + ioff ) % m->l;
+    if ( MAP_GET_TYPE ( m->a[ i ] ) == MAP_TYPE_VOID ) {
+      // entry
+      entrtyi = i;
+      break;
+    }
+  }
+  if ( entryi < 0 ) {
+    WARN ( "cannot find entry\n" );
+    return -1;
+  }
+
+  int doors_length = 0;
+  _map_door_t doors[ _MAP_DOORS_LENGTH ];
+  int entryx = entryi % m->w;
+  int entryy = entryi / m->w;
+  _map_fill_zone ( m, zones, entryx, entryy, 1, doors, &doors_length );
+
+  return 0;
+}
+*/
 
 int
 map_animshiftify ( map_t *m ) {

@@ -20,6 +20,7 @@
 #include "display.h"
 #include "dibbuffer.h"
 #include "collision.h"
+#include "entity.h"
 
 
 typedef struct {
@@ -64,6 +65,9 @@ typedef struct {
 
   const texture_t *surs[ MAP_SURFACES_LENGTH ]; // array of pointers to wall surfaces
 
+  entity_t *entities;
+  int entities_length;
+
 } window_t;
 // HACK: wndproc arguments list is predefined so any optional value
 //       passed to the winproc must be scoped globally.
@@ -81,6 +85,7 @@ w_kill () {
   for ( int i = 0; i < W_SOUNDS_LENGTH; ++i ) audiobuffer_kill ( &w.sounds[ i ] );
   font_kill ( &w.font );
   for ( int i = 0; i < MAP_SURFACES_LENGTH; ++i ) w.surs[ i ] = NULL;
+  free ( w.entities ); w.entities = NULL;
   return 0;
 }
 
@@ -88,7 +93,9 @@ w_kill () {
 int
 w_init ( HWND hwnd, int dw, int dh ) {
 
-  srand ( time ( NULL ) );
+  int randseed = time ( NULL );
+  WARN ( "randseed: %d\n", randseed );
+  srand ( randseed );
 
   w.m = ( mouse_t ) { 0, 0, true };
 
@@ -138,12 +145,16 @@ w_init ( HWND hwnd, int dw, int dh ) {
 
   audio_init ( &w.audio );
   // sound_kbjorklu ( &w.sounds[ 0 ], 60 );
-  ( *soundfuncs[ rand () % ( sizeof soundfuncs / sizeof *soundfuncs ) ] )( &w.sounds[ 0 ], 60 );
-  audiobuffer_volume ( &w.sounds[ 0 ], 0.75 );
-  audiobuffer_fadein ( &w.sounds[ 0 ], 10 );
-  audio_play ( &w.audio, &w.sounds[ 0 ] );
+  // ( *soundfuncs[ rand () % ( sizeof soundfuncs / sizeof *soundfuncs ) ] )( &w.sounds[ 0 ], 60 );
+  // audiobuffer_volume ( &w.sounds[ 0 ], 0.75 );
+  // audiobuffer_fadein ( &w.sounds[ 0 ], 10 );
+  // audio_play ( &w.audio, &w.sounds[ 0 ] );
 
 
+  w.entities_length = 1;
+  w.entities = malloc ( w.entities_length * sizeof *w.entities );
+  w.entities[ 0 ] = ( entity_t ) { &w.textures[ IMGN_Erock ], 0, w.camera.x, w.camera.y };
+  w.textures[ IMGN_Erock ].transparent = true;
 
   return 0;
 }
@@ -173,12 +184,11 @@ w_paint ( HWND hwnd ) {
 
   cast_floor ( &w.d, &w.map, &w.camera, w.surs, 1, 10.0, CAST_FLOOR | CAST_CEILING );
 
+  cast_walls ( &w.d, &w.map, &w.camera, w.surs, 15, 16.0 );
 
-
-  cast_walls ( &w.d, &w.map, &w.camera, w.surs, 15 );
-
-
-
+  for ( int i = 0; i < w.entities_length; ++i ) {
+    cast_entity ( &w.d, &w.camera, &w.entities[ i ], 16.0 );
+  }
 
 
   static int colors[ 16 ];
@@ -237,7 +247,7 @@ w_update ( HWND hwnd ) {
   const int mdy = w.m.y - w.height / 2;
   center_mouse ( hwnd );
   if ( mdx != 0 ) {
-    camera_rotate ( &w.camera, mdx * -0.01 );
+    camera_rotate ( &w.camera, mdx * -0.0001 * w.elapsed );
   }
 
 
@@ -258,6 +268,11 @@ w_update ( HWND hwnd ) {
     const double ncx = w.camera.x + w.camera.planex * +0.004 * w.elapsed;
     const double ncy = w.camera.y + w.camera.planey * +0.004 * w.elapsed;
     collision_test ( &w.map, 0.25, ncx, ncy, &w.camera.x, &w.camera.y );
+  }
+
+  if ( w.keys[ 'P' ] ) {
+    w.entities[ 0 ].x = w.camera.x;
+    w.entities[ 0 ].y = w.camera.y;
   }
 
 

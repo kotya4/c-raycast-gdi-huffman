@@ -8,6 +8,7 @@
 #include "img.h"
 #include "display.h"
 #include "typedefs.h"
+#include "entity.h"
 
 
 int
@@ -17,9 +18,9 @@ cast_walls
   , const camera_t *c
   , const texture_t **surfaces
   , const int render_distance
+  , const double brightness
   )
 {
-  const double brightness = ( double )( render_distance + 1 );
   for ( int px = 0; px < d->width; ++px ) {
     // Display x in camera space.
     const double cx = 2.0 * px / d->width - 1;
@@ -207,6 +208,65 @@ cast_floor
           d->pixels[ ( d->width * ( d->height - py - 1 ) + px ) * 3 + 0 ] = ( uint8_t )( rgb24.b * fade );
         }
       }
+    }
+  }
+  return 0;
+}
+
+
+
+
+int
+cast_entity
+  ( display_t *d
+  , const camera_t *c
+  , entity_t *e
+  , const double brightness
+  )
+{
+  // _________     __________   __________     [ camera.planex   camera.dirx ] ( -1 )
+  // transform = ( sprite.pos - camera.pos ) x |                             |
+  //                                           [ camera.planey   camera.diry ]
+  const double det = 1.0 / ( c->planex * c->diry - c->dirx * c->planey );
+  const double rx = e->x - c->x;
+  const double ry = e->y - c->y;
+  const double transformx = det * ( rx * c->diry - ry * c->dirx );
+  const double transformy = det * ( ry * c->planex     - rx * c->planey );
+  if ( transformy < 0 ) return 0; // out of near plane
+  const double scale = 0.5;
+  const int spritex = ( int ) ( d->width / 2 * ( 1 + transformx / transformy ) );
+  const int spriteh0 = abs ( ( int ) ( d->height / transformy ) );
+  const int spriteh = ( int ) ( spriteh0 * scale );
+  const int spritew = spriteh;
+  const int sdy = ( spriteh0 - spriteh ) / 2;
+  const int spritey0 = max ( d->height / 2 - spriteh / 2 + sdy, 0 );
+  const int spritey1 = min ( d->height / 2 + spriteh / 2 + sdy, d->height - 1 );
+  const int spritex0 = max ( spritex - spritew / 2, 0 );
+  const int spritex1 = min ( spritex + spritew / 2, d->width - 1 );
+  const double dist = sqrt ( rx * rx + ry * ry );
+  // Fade out by distance
+  const double fade = min ( 1.0, max ( 0.1, 1 - ( dist / brightness ) ) );
+  const int tw = TEXTURE_W ( *e->t, e->ti );
+  const int th = TEXTURE_H ( *e->t, e->ti );
+  for ( int px = spritex0; px < spritex1; ++px ) {
+    const int tx = ( int )( ( px - spritex + spritew / 2 ) * tw / ( double ) spritew );
+    for ( int py = spritey0; py < spritey1; ++py ) {
+      const double dbuf = d->depthbuffer[ d->width * py + px ];
+      if ( dbuf != 0 && dbuf < dist ) continue;
+      const int ty = ( py - spritey0 ) * th / spriteh;
+      // Apply pixels to the display.
+      const int ati = tw * ty + tx;
+      const bmpi_rgb24_t rgb24 = TEXTURE_RGB24 ( *e->t, e->ti, ati );
+      // skip alpha
+      if ( e->t->transparent && BMPI_RGB24_EQUAL ( rgb24, BMPI_RGB24_ALPHA ) ) {
+        continue;
+      }
+      // set pixels
+      d->pixels[ ( d->width * py + px ) * 3 + 2 ] = ( uint8_t )( rgb24.r * fade );
+      d->pixels[ ( d->width * py + px ) * 3 + 1 ] = ( uint8_t )( rgb24.g * fade );
+      d->pixels[ ( d->width * py + px ) * 3 + 0 ] = ( uint8_t )( rgb24.b * fade );
+      // depth
+      d->depthbuffer[ d->width * py + px ] = dist || 1;
     }
   }
   return 0;
