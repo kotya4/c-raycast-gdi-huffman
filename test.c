@@ -70,49 +70,66 @@ size_t buffer_len;
 void fibword ( size_t n ) {
   if ( buffer_len + 1 >= 128 ) return;
   if ( n == 0 ) {
-    buffer[ buffer_len ] = '0';
+    buffer[ buffer_len ] = 'b';
     buffer_len += 1;
     return;
   }
   else if ( n == 1 ) {
-    buffer[ buffer_len ] = '1';
-    buffer_len += 1;
-    return;
-  }
-  else if ( n == 2 ) {
-    buffer[ buffer_len ] = '2';
-    buffer_len += 1;
-    return;
-  }
-  else if ( n == 3 ) {
-    buffer[ buffer_len ] = '3';
-    buffer_len += 1;
-    return;
-  }
-  else if ( n == 5 ) {
-    buffer[ buffer_len ] = '5';
-    buffer_len += 1;
-    return;
-  }
-  else if ( n == 7 ) {
-    buffer[ buffer_len ] = '7';
+    buffer[ buffer_len ] = 'a';
     buffer_len += 1;
     return;
   }
   fibword ( n - 1 );
   fibword ( n - 2 );
-
-
-  // strcat ( buffer, fibword ( n - 1 ) );
-
-  // strcat ( buffer, fibword ( n - 2 ) );
-  // return buffer;
 }
+
+
+char sprintf128_buffer[ 128 ];
+#define sprintf128( ... ) ({ \
+  sprintf ( sprintf128_buffer, __VA_ARGS__ ); \
+  sprintf128_buffer; \
+})
+
 
 
 int
 main () {
 
+  char *s = "абвгдеёжзийклмнопрстуфхцчшщъыьэюя";
+  for ( ; *s != '\0'; ++s ) {
+    int v = *s;
+    if ( v < 0 ) { // extended
+      v = -v;
+    }
+    printf ( "%x\n", v );
+  }
+
+
+
+  return 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // printf ( "%s\n", sprintf128( "hello, %d", 666 ) );
+  // printf ( "%s\n", sprintf128( "hi" ) );
+
+
+
+
+
+
+
+/*
   printf ( "test\n" );
 
   for ( size_t i = 0; i < 15; ++i ) {
@@ -122,7 +139,7 @@ main () {
     fibword ( i );
     printf ( "%s %d\n", buffer, buffer_len );
   }
-
+*/
 
 }
 

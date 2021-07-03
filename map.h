@@ -10,19 +10,29 @@
 #define MAP_TYPE_VOID 0 // can be door
 #define MAP_TYPE_PASS 1 // can be door or void
 #define MAP_TYPE_WALL 2
-typedef uint16_t mapval_t;
-// <ceiling:4><floor:4><wall:4><type:2> : 14
-#define MAP_GET_TYPE( v ) ( ( v >> 0             ) & 0x3 )
-#define MAP_GET_SURW( v ) ( ( v >> 0 + 2         ) & 0xf )
-#define MAP_GET_SURF( v ) ( ( v >> 0 + 2 + 4     ) & 0xf )
-#define MAP_GET_SURC( v ) ( ( v >> 0 + 2 + 4 + 4 ) & 0xf )
-#define MAP_PUT_TYPE( v ) ( ( v & 0x3 ) << 0             )
-#define MAP_PUT_SURW( v ) ( ( v & 0xf ) << 0 + 2         )
-#define MAP_PUT_SURF( v ) ( ( v & 0xf ) << 0 + 2 + 4     )
-#define MAP_PUT_SURC( v ) ( ( v & 0xf ) << 0 + 2 + 4 + 4 )
+typedef uint32_t mapval_t;
+// <sprite index:4><ceiling:4><floor:4><wall:4><type:2> : 18
+#define MAP_GET_TYPE( v ) ( ( ( v ) >> 0             ) & 0x3 )
+#define MAP_GET_SURW( v ) ( ( ( v ) >> 0 + 2         ) & 0xf )
+#define MAP_GET_SURF( v ) ( ( ( v ) >> 0 + 2 + 4     ) & 0xf )
+#define MAP_GET_SURC( v ) ( ( ( v ) >> 0 + 2 + 4 + 4 ) & 0xf )
+#define MAP_PUT_TYPE( v ) ( ( ( v ) & 0x3 ) << 0             )
+#define MAP_PUT_SURW( v ) ( ( ( v ) & 0xf ) << 0 + 2         )
+#define MAP_PUT_SURF( v ) ( ( ( v ) & 0xf ) << 0 + 2 + 4     )
+#define MAP_PUT_SURC( v ) ( ( ( v ) & 0xf ) << 0 + 2 + 4 + 4 )
 #define MAP_CHANGE_TYPE( m, v ) ({                                  \
   m = m ^ MAP_PUT_TYPE ( MAP_GET_TYPE ( m ) ) | MAP_PUT_TYPE ( v ); \
 })
+#define MAP_GET_SI( v ) ( ( ( v ) >> 0 + 2 + 4 + 4 + 4 ) & 0xf )
+#define MAP_PUT_SI( v ) ( ( ( v ) & 0xf ) << 0 + 2 + 4 + 4 + 4 )
+#define MAP_INC_SI( m ) ({                           \
+  const mapval_t si = MAP_GET_SI ( m );              \
+  m = m ^ MAP_PUT_SI ( si ) | MAP_PUT_SI ( si + 1 ); \
+})
+
+#define MAP_SURFACES_LENGTH 16
+#define MAP_SOLID( m, x, y ) ( MAP_GET_TYPE ( ( m ).a[ ( y ) * ( m ).w + ( x ) ] ) == MAP_TYPE_WALL )
+
 
 typedef struct {
   mapval_t *a;
@@ -57,11 +67,11 @@ map_surfacify // randomly changes existing surfaces
   , const bool very_mazy
   )
 {
-  bool keep_wall_surface    = rand () % 2 > 0; // ~50%
+  bool keep_wall_surface    = rand () % 3 == 0;
   bool keep_floor_surface   = rand () % 4 > 0; // ~75%
   bool keep_ceiling_surface = rand () % 5 > 0; // ~80%
   if ( very_mazy ) {
-    keep_wall_surface    = rand () % 10 > 0; // ~90%
+    keep_wall_surface    = rand () % 3 == 0;
     keep_floor_surface   = rand () % 10 > 0; // ~90%
     keep_ceiling_surface = rand () % 10 > 0; // ~90%
   }
@@ -167,6 +177,7 @@ map_borderify ( map_t *m ) {
 
 int
 map_crossify ( map_t *m ) {
+  // TODO: круст должен создавать проходы везде
   size_t w = m->w >> 1;
   size_t h = m->h >> 1;
   // cross
@@ -258,6 +269,22 @@ map_quadrantify ( map_t *m ) { // quadrant maze generator
     map_voidify ( m, 0, 0, w, h );
     map_mazify ( m, 0, 0, w, h, 0, rand () % 8 > 0 ); // catacombs 12.5%, rooms 87.5%
   }
+}
+
+
+int
+map_animshiftify ( map_t *m ) {
+  for ( size_t i = 0; i < m->l; ++i )
+    m->a[ i ] |= MAP_PUT_SI ( rand () );
+  return 0;
+}
+
+
+int
+map_animate ( map_t *m ) {
+  for ( size_t i = 0; i < m->l; ++i )
+    MAP_INC_SI ( m->a[ i ] );
+  return 0;
 }
 
 

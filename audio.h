@@ -26,6 +26,23 @@ audiobuffer_init ( audiobuffer_t *b, const size_t legnth ) {
 }
 
 
+int
+audiobuffer_fadein ( audiobuffer_t *b, const size_t secs ) {
+  const size_t len = secs * 8000;
+  for ( size_t t = 0; t < b->l && t < len; ++t )
+    b->a[ t ] = b->a[ t ] * ( t / ( double ) len );
+  return 0;
+}
+
+
+int
+audiobuffer_volume ( audiobuffer_t *b, const double v ) {
+  for ( size_t t = 0; t < b->l; ++t )
+    b->a[ t ] = b->a[ t ] * v;
+  return 0;
+}
+
+
 typedef struct {
   HWAVEOUT hwo;
   WAVEFORMATEX wfx;

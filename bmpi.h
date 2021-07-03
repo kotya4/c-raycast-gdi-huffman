@@ -13,6 +13,9 @@ typedef struct {
 #define BMPI_RGB24_EQUAL( c1, c2 ) ( c1.r == c2.r && c1.g == c2.g && c1.b == c2.b )
 
 
+const bmpi_rgb24_t BMPI_RGB24_ALPHA = { 144, 240, 224 };
+
+
 typedef struct {
   size_t length;
   bmpi_rgb24_t *rgb24;

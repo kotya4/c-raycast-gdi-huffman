@@ -1,0 +1,6 @@
+  int t = ( w.time0 - elapsed ) * 8;
+  for ( size_t y = 0; y < dheight; ++y )
+    for ( size_t x = 0; x < dwidth; ++x )
+  {
+    pixels[ ( y * dwidth + x ) * 3 + 2 ] = ( uint8_t ) w.sounds[0].a[t];
+  }

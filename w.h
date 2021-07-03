@@ -6,32 +6,20 @@
 #include <stdlib.h> // calloc
 #include <string.h> // memset, memcpy
 #include <time.h> // time
-#include "err.h"
+#include "warn.h"
 // #include "sprog.h"
 #include "map.h"
-#include "imgd.h"
+#include "img.h"
 #include "audio.h"
 #include "sound.h"
-
-
-typedef struct {
-  size_t x;
-  size_t y;
-} mouse_t;
-
-
-typedef struct {
-  size_t id;
-  size_t delayms;
-} timer_t;
-
-
-typedef struct {
-  size_t width;
-  size_t height;
-  size_t length;
-  uint8_t *pixels;
-} display_t;
+#include "camera.h"
+#include "font.h"
+#include "sprintfexp.h"
+#include "cast.h"
+#include "typedefs.h"
+#include "display.h"
+#include "dibbuffer.h"
+#include "collision.h"
 
 
 typedef struct {
@@ -42,17 +30,16 @@ typedef struct {
 
   timer_t render_timer;
 
-  size_t time; // posix in millisecs
-  size_t time0; // program running in millisecs
+  int time; // posix in millisecs
+  int time0; // program running in millisecs
+  int elapsed; // time elapsed between frames
 
   display_t d;
 
-  void *hbmpraw;
-  HBITMAP hbmp;
+  dibbuffer_t dib;
 
-  // TODO: probably not nessesary as wm_paint provides window size
-  size_t width;
-  size_t height;
+  int width;
+  int height;
 
   // =====================================
   // GAME ; TODO: maybe need to be separated
@@ -61,15 +48,21 @@ typedef struct {
   map_t map;
 
   bmpi_t *bmpis;
-  size_t bmpis_length;
+  int bmpis_length;
 
   texture_t *textures;
-  size_t textures_length;
+  int textures_length;
 
   audio_t audio;
 
   #define W_SOUNDS_LENGTH 1
   audiobuffer_t sounds[ W_SOUNDS_LENGTH ];
+
+  camera_t camera;
+
+  font_t font;
+
+  const texture_t *surs[ MAP_SURFACES_LENGTH ]; // array of pointers to wall surfaces
 
 } window_t;
 // HACK: wndproc arguments list is predefined so any optional value
@@ -79,31 +72,25 @@ window_t w;
 
 int
 w_kill () {
-
-  free ( w.d.pixels ); w.d.pixels = NULL;
-  DeleteObject ( w.hbmp );
-  w.hbmpraw = NULL;
+  display_kill ( &w.d );
+  dibbuffer_kill ( &w.dib );
   map_kill ( &w.map );
-
-  for ( size_t i = 0; i < w.bmpis_length; ++i ) {
-    bmpi_kill ( &w.bmpis[ i ] );
-  }
+  for ( int i = 0; i < w.bmpis_length; ++i ) bmpi_kill ( &w.bmpis[ i ] );
   w.bmpis = NULL;
-
   audio_kill ( &w.audio );
-  for ( size_t i = 0; i < W_SOUNDS_LENGTH; ++i ) {
-    audiobuffer_kill ( &w.sounds[ i ] );
-  }
+  for ( int i = 0; i < W_SOUNDS_LENGTH; ++i ) audiobuffer_kill ( &w.sounds[ i ] );
+  font_kill ( &w.font );
+  for ( int i = 0; i < MAP_SURFACES_LENGTH; ++i ) w.surs[ i ] = NULL;
+  return 0;
 }
 
 
 int
-w_init ( HWND hwnd, size_t dw, size_t dh ) {
+w_init ( HWND hwnd, int dw, int dh ) {
 
-  srand ( time( NULL ) );
+  srand ( time ( NULL ) );
 
-  w.m.x = 0; // will be init on WM_MOUSEMOVE
-  w.m.y = 0;
+  w.m = ( mouse_t ) { 0, 0, true };
 
   w.render_timer.id = 1;
   w.render_timer.delayms = 1000 / 60; // 60 frames per second
@@ -113,28 +100,9 @@ w_init ( HWND hwnd, size_t dw, size_t dh ) {
 
   memset ( w.keys, false, 256 * sizeof *w.keys );
 
-  w.d.width = dw;
-  w.d.height = dh;
-  w.d.length = w.d.width * w.d.height * 3;
-  w.d.pixels = calloc ( w.d.length, sizeof *w.d.pixels );
+  display_init ( &w.d, dw, dh );
 
-  BITMAPINFOHEADER bmpih =
-    { sizeof ( BITMAPINFOHEADER ) // header size
-    , w.d.width
-    , -w.d.height // negative for top-down DIB
-    , 1           // planes, must be 1
-    , 24          // 3 bytes per pixel, bmiColors can be NULL
-    , BI_RGB      // w\o compression
-    , 0           // image size, can be 0 for BI_RGB
-    , 0           // unused by CreateDIBSection
-    , 0           // unused by CreateDIBSection
-    , 0           // used colors, must be 0 for packed bmps
-    , 0           // required colors, can be 0
-    };
-  BITMAPINFO bmpi = { bmpih, { [ 0 ] = ( RGBQUAD ) {} } };
-  HDC hdc = GetDC ( hwnd );
-  w.hbmpraw = NULL;
-  w.hbmp = CreateDIBSection ( hdc, &bmpi, DIB_RGB_COLORS, &w.hbmpraw, NULL, 0 );
+  dibbuffer_init ( &w.dib, dw, dh, GetDC ( hwnd ) );
 
   w.width  = 0; // will be init on WM_SIZE after window appear
   w.height = 0;
@@ -144,88 +112,164 @@ w_init ( HWND hwnd, size_t dw, size_t dh ) {
   map_crossify ( &w.map );
   map_borderify ( &w.map );
 
-  imgdecode ( &w.bmpis, &w.bmpis_length, &w.textures, &w.textures_length );
+  map_animshiftify ( &w.map );
+
+
+  w.camera = CAMERA_DEFAULT;
+  {
+    const int offset = rand ();
+    for ( int i0 = 0; i0 < w.map.l; ++i0 ) {
+      const int i = ( i0 + offset ) % w.map.l;
+      if ( MAP_GET_TYPE ( w.map.a[ i ] ) != MAP_TYPE_WALL ) {
+        w.camera.x = i % w.map.w + 0.5;
+        w.camera.y = i / w.map.w + 0.5;
+        break;
+      }
+    }
+  }
+
+  img_decode ( &w.bmpis, &w.bmpis_length, &w.textures, &w.textures_length );
+
+  font_init ( &w.font, w.textures[ IMGN_Ifixedsysa ].bmpis[ 0 ], 128, 192, 16, 16 );
+
+  img_filterbytype ( w.surs, MAP_SURFACES_LENGTH, w.textures, w.textures_length, 'S' );
+
+  // for ( int i = 0; i < 16; ++i ) w.surs[ i ] = &w.textures[ IMGN_Sme ];
 
   audio_init ( &w.audio );
-  sound_kbjorklu ( &w.sounds[ 0 ] );
-  sound_fadein ( &w.sounds[ 0 ], 10 );
-
+  // sound_kbjorklu ( &w.sounds[ 0 ], 60 );
+  ( *soundfuncs[ rand () % ( sizeof soundfuncs / sizeof *soundfuncs ) ] )( &w.sounds[ 0 ], 60 );
+  audiobuffer_volume ( &w.sounds[ 0 ], 0.75 );
+  audiobuffer_fadein ( &w.sounds[ 0 ], 10 );
   audio_play ( &w.audio, &w.sounds[ 0 ] );
 
+
+
+  return 0;
 }
 
 
 int
 w_paint ( HWND hwnd ) {
-
-  const size_t time = GetTickCount ();
-  const size_t elapsed = time - w.time;
-  w.time0 += elapsed;
-  w.time = time;
+  {
+    const int time = GetTickCount ();
+    w.elapsed = time - w.time;
+    w.time0 += w.elapsed;
+    w.time = time;
+  }
   PAINTSTRUCT ps = {};
   HDC hdc = BeginPaint ( hwnd, &ps );
-  const int top = ps.rcPaint.top;
-  const int left = ps.rcPaint.left;
-  const int width = ps.rcPaint.right - ps.rcPaint.left;
-  const int height = ps.rcPaint.bottom - ps.rcPaint.top;
-  const int dwidth = w.d.width;
-  const int dheight = w.d.height;
+  const int wt = ps.rcPaint.top;
+  const int wl = ps.rcPaint.left;
+  const int ww = ps.rcPaint.right - ps.rcPaint.left;
+  const int wh = ps.rcPaint.bottom - ps.rcPaint.top;
+  const int dw = w.d.width;
+  const int dh = w.d.height;
+  uint8_t *p = w.d.pixels;
+  memset ( p, 0, w.d.length * sizeof *p );
+  memset ( w.d.depthbuffer, 0, w.d.width * w.d.height * sizeof *w.d.depthbuffer );
 
-  uint8_t *pixels = w.d.pixels;
 
-  memset ( pixels, 0, w.d.length * sizeof *pixels );
 
-  // static int colors[ 16 ];
-  // static bool colors_gen = true;
-  // if ( colors_gen ) {
-    // colors_gen = false;
-    // for ( int i = 0; i < 16; ++i ) {
-      // colors[ i ] = rand () % 0x1000000;
-    // }
-  // }
+  cast_floor ( &w.d, &w.map, &w.camera, w.surs, 1, 10.0, CAST_FLOOR | CAST_CEILING );
 
-  int t = ( w.time0 - elapsed ) * 8;
-  for ( size_t y = 0; y < dheight; ++y )
-    for ( size_t x = 0; x < dwidth; ++x )
+
+
+  cast_walls ( &w.d, &w.map, &w.camera, w.surs, 15 );
+
+
+
+
+
+  static int colors[ 16 ];
+  static bool colors_gen = true;
+  if ( colors_gen ) {
+    colors_gen = false;
+    for ( int i = 0; i < 16; ++i ) {
+      colors[ i ] = rand () % 0x1000000;
+    }
+  }
+  for ( int y = 0; y < w.map.h; ++y )
+    for ( int x = 0; x < w.map.w; ++x )
   {
-    pixels[ ( y * dwidth + x ) * 3 + 2 ] = ( uint8_t ) w.sounds[0].a[t];
-
+    int type = MAP_GET_TYPE ( w.map.a[ y * w.map.w + x ] );
+    int surs = MAP_GET_SURW ( w.map.a[ y * w.map.w + x ] );
+    int surf = MAP_GET_SURF ( w.map.a[ y * w.map.w + x ] );
+    int surc = MAP_GET_SURC ( w.map.a[ y * w.map.w + x ] );
+    if ( type == MAP_TYPE_WALL ) {
+      p[ ( y * dw + x ) * 3 + 2 ] = ( uint8_t ) ( colors[ surs ] >> 0x00 ) & 0xff;
+      p[ ( y * dw + x ) * 3 + 1 ] = ( uint8_t ) ( colors[ surs ] >> 0x08 ) & 0xff;
+      p[ ( y * dw + x ) * 3 + 0 ] = ( uint8_t ) ( colors[ surs ] >> 0x10 ) & 0xff;
+    }
+    else {
+      p[ ( y * dw + x ) * 3 + 2 ] = ( uint8_t ) ( ( colors[ surc ] >> 0x00 ) & 0xff ) / 2;
+      p[ ( y * dw + x ) * 3 + 1 ] = ( uint8_t ) ( ( colors[ surc ] >> 0x08 ) & 0xff ) / 2;
+      p[ ( y * dw + x ) * 3 + 0 ] = ( uint8_t ) ( ( colors[ surc ] >> 0x10 ) & 0xff ) / 2;
+    }
   }
 
-  // const size_t textures_index = ( ( size_t ) ( w.time0 / 2000 ) ) % w.textures_length;
-  // const size_t t_index = ( ( size_t ) ( w.time0 / 500 ) ) % w.textures[ textures_index ].length;
-  // for ( size_t y = 0; y < dheight; ++y )
-    // for ( size_t x = 0; x < dwidth; ++x )
-  // {
+  p[ ( ( int ) w.camera.y * dw + ( int ) w.camera.x ) * 3 + 2 ] = ( uint8_t ) 0xff;
+  p[ ( ( int ) w.camera.y * dw + ( int ) w.camera.x ) * 3 + 1 ] = ( uint8_t ) 0xf0;
+  p[ ( ( int ) w.camera.y * dw + ( int ) w.camera.x ) * 3 + 0 ] = ( uint8_t ) 0x00;
 
+  font_paint ( &w.font, p, dw, dh, 0, dh - 12, sprintf128 ( "e:%d", w.elapsed ), 0xff00ff );
 
-
-    // bmpi_rgb24_t *rgb24 =
-      // bmpi_rgb24_at
-        // ( w.textures[ textures_index ].bmpis[ t_index ]
-        // , x % w.textures[ textures_index ].bmpis[ t_index ]->w
-        // , y % w.textures[ textures_index ].bmpis[ t_index ]->h
-        // );
-
-    // if ( rgb24 == NULL ) ERR ( -100 );
-
-    // pixels[ ( y * dwidth + x ) * 3 + 2 ] = ( uint8_t ) rgb24->r;
-    // pixels[ ( y * dwidth + x ) * 3 + 1 ] = ( uint8_t ) rgb24->g;
-    // pixels[ ( y * dwidth + x ) * 3 + 0 ] = ( uint8_t ) rgb24->b;
-  // }
-
-
-
-  memcpy ( w.hbmpraw, pixels, w.d.length * sizeof *pixels );
-
-  HDC cdc = CreateCompatibleDC ( hdc );
-  HBITMAP oldhbmp = ( HBITMAP ) SelectObject ( cdc, w.hbmp );
-  StretchBlt ( hdc, left, top, width, height, cdc, 0, 0, dwidth, dheight, SRCCOPY );
-  SelectObject ( cdc, oldhbmp );
-  DeleteDC ( cdc );
+  memcpy ( w.dib.hbmpraw, p, w.d.length * sizeof *p );
+  dibbuffer_flush ( &w.dib, hdc, wl, wt, ww, wh, 0, 0, dw, dh );
   EndPaint ( hwnd, &ps );
   return 0;
+}
 
+
+int
+center_mouse ( HWND hwnd ) {
+  POINT point = { w.width / 2, w.height / 2 };
+  ClientToScreen ( hwnd, &point );
+  SetCursorPos ( point.x, point.y );
+  return 0;
+}
+
+
+int
+w_update ( HWND hwnd ) {
+
+  const int mdx = w.m.x - w.width  / 2;
+  const int mdy = w.m.y - w.height / 2;
+  center_mouse ( hwnd );
+  if ( mdx != 0 ) {
+    camera_rotate ( &w.camera, mdx * -0.01 );
+  }
+
+
+  if ( w.keys[ 'W' ] ) {
+    const double ncx = w.camera.x + w.camera.dirx * +0.004 * w.elapsed;
+    const double ncy = w.camera.y + w.camera.diry * +0.004 * w.elapsed;
+    collision_test ( &w.map, 0.25, ncx, ncy, &w.camera.x, &w.camera.y );
+  } else if ( w.keys[ 'S' ] ) {
+    const double ncx = w.camera.x + w.camera.dirx * -0.004 * w.elapsed;
+    const double ncy = w.camera.y + w.camera.diry * -0.004 * w.elapsed;
+    collision_test ( &w.map, 0.25, ncx, ncy, &w.camera.x, &w.camera.y );
+  }
+  if ( w.keys[ 'A' ] ) {
+    const double ncx = w.camera.x + w.camera.planex * -0.004 * w.elapsed;
+    const double ncy = w.camera.y + w.camera.planey * -0.004 * w.elapsed;
+    collision_test ( &w.map, 0.25, ncx, ncy, &w.camera.x, &w.camera.y );
+  } else if ( w.keys[ 'D' ] ) {
+    const double ncx = w.camera.x + w.camera.planex * +0.004 * w.elapsed;
+    const double ncy = w.camera.y + w.camera.planey * +0.004 * w.elapsed;
+    collision_test ( &w.map, 0.25, ncx, ncy, &w.camera.x, &w.camera.y );
+  }
+
+
+
+  static int anim_i = 0;
+  anim_i += 1;
+  if ( anim_i > 2 ) {
+    map_animate ( &w.map );
+    anim_i = 0;
+  }
+
+  return 0;
 }
 
 
@@ -258,6 +302,8 @@ wndproc ( HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam ) {
   else if ( umsg == WM_TIMER ) {
     if ( wparam == w.render_timer.id ) { // periodic paint msg
       InvalidateRect ( hwnd, NULL, FALSE );
+      // HACK: w_update cannot be called from WM_PAINT or mouse will not work
+      w_update ( hwnd );
     }
     return 0;
   }
@@ -273,19 +319,18 @@ wndproc ( HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam ) {
   }
 
   else if ( umsg == WM_MOUSEMOVE ) {
-    w.m.x = ( size_t ) LOWORD ( lparam );
-    w.m.y = ( size_t ) HIWORD ( lparam );
+    w.m.x = ( int ) LOWORD ( lparam );
+    w.m.y = ( int ) HIWORD ( lparam );
     return 0;
   }
 
   else if ( umsg == WM_SIZE ) {
-    w.width  = ( size_t ) LOWORD ( lparam );
-    w.height = ( size_t ) HIWORD ( lparam );
+    w.width  = ( int ) LOWORD ( lparam );
+    w.height = ( int ) HIWORD ( lparam );
     return 0;
   }
 
   return DefWindowProc ( hwnd, umsg, wparam, lparam );
-
 }
 
 
@@ -322,10 +367,12 @@ make_hwnd
     , NULL                 // Additional application data
     );
 
-  if ( *hwnd == NULL ) ERR ( ERR_HWND_IS_NULL );
+  if ( *hwnd == NULL ) {
+    WARN ( "CreateWindowEx: hwnd is null\n" );
+    return -1;
+  }
 
   return 0;
-
 }
 
 

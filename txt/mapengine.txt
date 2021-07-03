@@ -1,5 +1,6 @@
   for ( size_t y = 0; y < w.map.h; ++y )
     for ( size_t x = 0; x < w.map.w; ++x )
+  {
     size_t type = MAP_GET_TYPE ( w.map.a[ y * w.map.w + x ] );
     size_t surw = MAP_GET_SURW ( w.map.a[ y * w.map.w + x ] );
     size_t surf = MAP_GET_SURF ( w.map.a[ y * w.map.w + x ] );
