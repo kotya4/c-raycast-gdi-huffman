@@ -10,7 +10,7 @@ WinMain ( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmd
   const int w = 100;
   const int h = 100;
   HWND hwnd;
-  make_hwnd ( &hwnd, L"ray", CW_USEDEFAULT, CW_USEDEFAULT, w, h, hInstance );
+  make_hwnd ( &hwnd, L"ray", 2000,0, w, h, hInstance );
 
   const int dw = 100;
   const int dh = 100;

@@ -76,6 +76,7 @@ window_t w;
 
 int
 w_kill () {
+  husk_deinit();
   display_kill ( &w.d );
   dibbuffer_kill ( &w.dib );
   map_kill ( &w.map );
@@ -155,6 +156,8 @@ w_init ( HWND hwnd, int dw, int dh ) {
   w.entities = malloc ( w.entities_length * sizeof *w.entities );
   w.entities[ 0 ] = ( entity_t ) { &w.textures[ IMGN_Erock ], 0, w.camera.x, w.camera.y };
   w.textures[ IMGN_Erock ].transparent = true;
+
+  husk_init();
 
   return 0;
 }

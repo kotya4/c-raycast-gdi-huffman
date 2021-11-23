@@ -1,34 +1,33 @@
 #ifndef HUSK_H
 #define HUSK_H
-#include "font.h"//font_t,font_paint
-
-char input[128];
-int inputlen=0;
-int cx=0;
-int cy=0;
+#include "husktypes.h"//ht_clear,types
+#include "huskdb.h"
 
 void
 husk_onpress
 (char key
 ){
-input[inputlen]=key;
-inputlen=(inputlen+1)&127;
+put_db(key);
 }
-
-typedef font_t * f_t;
-typedef unsigned char * p_t;//pixelbuffer
-typedef unsigned int pd_t;//pixelbuffer dimention type
-typedef unsigned int color_t;
 
 void
 husk_ondraw
-(const f_t f
-,p_t p
-,pd_t w
-,pd_t h
+(Tf f
+,Tp p
+,Td w
+,Td h
 ){
-font_paint(f,p,w,h,cx,cy,input,0xff0000);
+ht_clear(p,w,h,0x111111);
+flush_db(f,p,w,h);
+draw_cursor(f,p,w,h);
 }
 
+void husk_init(){
+create_db();
+clear_db();
+}
+void husk_deinit(){
+destroy_db();
+}
 
 #endif//HUSK_H
