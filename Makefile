@@ -19,3 +19,7 @@ i:
 	python imgp.py
 	gcc imgc.c -std=c99 -o imgc -Wall $(NOWARN)
 	./imgc
+
+husk:
+	gcc main2.c $(LINKER) -o husk
+
