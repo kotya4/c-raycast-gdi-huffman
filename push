@@ -1,0 +1,8 @@
+msg=$1
+if [ "$msg" = "" ]
+then
+  msg="autocommit"
+fi
+git add .
+git commit -m $msg
+git push

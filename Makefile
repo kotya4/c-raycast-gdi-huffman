@@ -24,5 +24,5 @@ husk:
 	gcc main2.c $(LINKER) -o husk
 
 huskr:
-	gcc main2.c $(LINKER) -o huskr -o2 -s -DNDEBUG
+	gcc main2.c $(LINKER) -o huskr -O2 -s -DNDEBUG
 
