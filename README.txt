@@ -1,7 +1,8 @@
 RAY, stands for RAY AN YUM ( because yums are yummy )
 
 disadvantages of ./build/huskdump~211127.zip:
-  text buffer renders incorrectly
+  text buffer renders incorrectly, cured
+  last symbol is not rendering
 
 disadvantages of ./build/raybuild~210703.zip:
   renderer bug on some camera angles in usual version, cured

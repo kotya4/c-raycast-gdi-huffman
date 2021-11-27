@@ -29,7 +29,7 @@ for(int y=0;y<dbh;++y){
 		b[x]=db[i];
 		i++;
 	}
-	b[x]=0;
+	b[x-1]=0;//x here is dbw, so must be decremented
 	font_paint(f,p,w,h,0,y*fh,b,0xffffff);//no color buffer for now
 //TODO: dristnya
 }
