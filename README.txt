@@ -1,5 +1,3 @@
-RAY, stands for RAY AN YUM ( because yums are yummy )
-
 disadvantages of ./build/huskdump~211127.zip:
   text buffer renders incorrectly, cured
   last symbol is not rendering
